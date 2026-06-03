@@ -23,7 +23,7 @@ new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 // 4. Load the Gaussian Splat
 // Since the file is in the 'public' folder, we can reference it relative to the root
 const splat = new GaussianSplattingMesh("gaussianSplat", scene);
-splat.loadFileAsync("scene.ply").then(() => {
+splat.loadFileAsync("clusterFly_M.ply").then(() => {
     console.log("Gaussian Splat loaded successfully!");
     
     // Position adjustments if your splat spawns in the wrong spot:
