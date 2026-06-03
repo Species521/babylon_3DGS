@@ -3,11 +3,9 @@ import {
     Scene,
     HemisphericLight,
     Vector3,
-    MeshBuilder,
     ArcRotateCamera,
     Color4,
-    StandardMaterial,
-    Color3
+    GaussianSplattingMesh
 } from "@babylonjs/core";
 
 // 1. Initialize Engine and Canvas
@@ -16,19 +14,27 @@ const engine = new Engine(canvas, true);
 
 // 2. Scene Setup
 const scene = new Scene(engine);
+// Set the background color (Alpha 0 helps AR look cleaner)
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 
-// 3. Lighting
+// 3. Lighting (Splats don't strictly require standard lights, but good to keep)
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
-// 4. Create the Blue Cube
-// Positioned 2 units forward and slightly down so it sits nicely in your room space
-const box = MeshBuilder.CreateBox("box", { size: 1 }, scene);
-box.position.set(0, 0, 2);
-
-const mat = new StandardMaterial("m", scene);
-mat.diffuseColor = new Color3(0.2, 0.6, 1.0);
-box.material = mat;
+// 4. Load the Gaussian Splat
+// Since the file is in the 'public' folder, we can reference it relative to the root
+const splat = new GaussianSplattingMesh("gaussianSplat", scene);
+splat.loadFileAsync("scene.ply").then(() => {
+    console.log("Gaussian Splat loaded successfully!");
+    
+    // Position adjustments if your splat spawns in the wrong spot:
+    splat.position.set(0, 0, 2); 
+    
+    // Note: Splats often need orientation adjustments depending on how they were captured.
+    // If it is upside down, uncomment the line below to rotate it 180 degrees:
+    // splat.rotation.z = Math.PI;
+}).catch((err) => {
+    console.error("Error loading Gaussian Splat:", err);
+});
 
 // 5. Default Fallback Camera (Desktop/Mouse Orbit)
 const camera = new ArcRotateCamera(
@@ -44,21 +50,17 @@ camera.attachControl(canvas, true);
 // 6. WebXR Immersive AR Switch Function
 async function enableAR() {
     try {
-        // Create the default WebXR experience helper for AR
         const xrHelper = await scene.createDefaultXRExperienceAsync({
             uiOptions: {
-                sessionMode: 'immersive-ar',      // Requests camera feed + 3D tracking
-                referenceSpaceType: 'local-floor'  // Tracks your position relative to the floor
+                sessionMode: 'immersive-ar',
+                referenceSpaceType: 'local-floor'
             }
         });
 
-        // Remove the click listener so it doesn't try to trigger multiple AR sessions
         window.removeEventListener("click", enableAR);
-        
         console.log("WebXR AR Session initialized successfully.");
     } catch (e) {
         console.error("WebXR is not supported on this device/browser:", e);
-        alert("WebXR Immersive AR is not supported or was denied on this device.");
     }
 }
 
