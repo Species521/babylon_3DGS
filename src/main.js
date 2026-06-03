@@ -8,29 +8,31 @@ import {
     GaussianSplattingMesh
 } from "@babylonjs/core";
 
+// FIX: This explicitly registers the PLY file format loader into Babylon.js
+import "@babylonjs/loaders/PLY";
+
 // 1. Initialize Engine and Canvas
 const canvas = document.getElementById("c");
 const engine = new Engine(canvas, true);
 
 // 2. Scene Setup
 const scene = new Scene(engine);
-// Set the background color (Alpha 0 helps AR look cleaner)
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 
-// 3. Lighting (Splats don't strictly require standard lights, but good to keep)
+// 3. Lighting
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
 // 4. Load the Gaussian Splat
-// Since the file is in the 'public' folder, we can reference it relative to the root
 const splat = new GaussianSplattingMesh("gaussianSplat", scene);
-splat.loadFileAsync("clusterFly_M.ply").then(() => {
+
+// FIX: To load from a URL string path, we pass an object specifying the url
+splat.loadFileAsync({ url: "clusterFly_M.ply" }).then(() => {
     console.log("Gaussian Splat loaded successfully!");
     
-    // Position adjustments if your splat spawns in the wrong spot:
+    // Position adjustments if needed
     splat.position.set(0, 0, 2); 
     
-    // Note: Splats often need orientation adjustments depending on how they were captured.
-    // If it is upside down, uncomment the line below to rotate it 180 degrees:
+    // Un-comment if the splat is captured upside down
     // splat.rotation.z = Math.PI;
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
