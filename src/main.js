@@ -3,14 +3,15 @@ import {
     Scene,
     HemisphericLight,
     Vector3,
-    ArcRotateCamera,
+    DeviceOrientationCamera,
+    TransformNode,
     Color4,
     SceneLoader,
     WebXRState
 } from "@babylonjs/core";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
 
-// Initialize the loaders
+// 1. Initialize Loaders
 registerBuiltInLoaders();
 
 const canvas = document.getElementById("c");
@@ -21,89 +22,65 @@ scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
-// 1. Load the Gaussian Splat
+// 2. Load the Gaussian Splat
 let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
     if (splat) {
+        // Place splat at origin
         splat.position.set(0, 0, 0);
         
-        // Doubled the scaling from 6 to 12
+        // Double the size (set to 12)
         splat.scaling.setAll(12);
         
-        // Flip the splat upside down (180 degrees around the Z axis)
+        // Flip the splat upside down
         splat.rotation.z = Math.PI;
         
-        console.log("Gaussian Splat loaded, resized, and inverted successfully!");
+        console.log("Gaussian Splat configured successfully.");
     }
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 2. Camera Configuration
-const camera = new ArcRotateCamera(
-    "cam",
-    0,
-    Math.PI / 3,
-    8,
-    Vector3.Zero(), 
-    scene
-);
-camera.lowerBetaLimit = 0.2;
-camera.upperBetaLimit = Math.PI - 0.2;
+// 3. Setup Spatial Magic Window Rigging
+// Create an anchor node to offset the camera so it looks at the splat
+const cameraAnchor = new TransformNode("cameraAnchor", scene);
+cameraAnchor.position.set(0, 0, -8); // Push the camera platform back 8 units
+
+// Native Device Orientation Camera setup
+const camera = new DeviceOrientationCamera("magicWindowCam", Vector3.Zero(), scene);
+
+// Attach camera to our anchor node
+camera.parent = cameraAnchor;
+
+// Ensure camera points directly at the splat origin
+camera.setTarget(Vector3.Zero());
 camera.attachControl(canvas, true);
 
-// 3. Gyroscope Setup (Magic Window Mode)
+// 4. Gyro Sensor Permissions Initialization
 let xrActive = false;
 
-async function requestGyroPermission() {
+async function requestSensors() {
     if (typeof DeviceOrientationEvent !== "undefined" && 
         typeof DeviceOrientationEvent.requestPermission === "function") {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
             if (permission === "granted") {
-                initGyroListener();
+                console.log("Device orientation tracking activated.");
             }
         } catch (error) {
-            console.error("DeviceOrientation permission denied:", error);
+            console.error("Sensor initialization failed:", error);
         }
-    } else {
-        initGyroListener();
     }
 }
 
-function initGyroListener() {
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener("deviceorientation", (event) => {
-            if (xrActive) return;
-            if (event.alpha === null || event.beta === null || event.gamma === null) return;
-
-            // Convert degrees to radians
-            const alpha = (event.alpha * Math.PI) / 180;
-            const beta = (event.beta * Math.PI) / 180;
-            const gamma = (event.gamma * Math.PI) / 180;
-
-            // Subtly shift the camera's target position based on tilt to break the "locked to screen" feel
-            // This simulates slight positional head-tracking/translation purely via rotational data
-            camera.target.x = Math.sin(gamma) * 2;
-            camera.target.y = Math.sin(beta - (Math.PI / 3)) * 2;
-
-            // Apply smooth orientation to the viewing arcs
-            camera.alpha = -alpha;
-            camera.beta = Math.max(0.2, Math.min(Math.PI - 0.2, beta));
-        });
-    }
-}
-
-// 4. True Walk-Around via WebXR AR
+// 5. Native WebXR AR Switch
 async function enableAR() {
-    await requestGyroPermission();
+    // Trigger sensor check for fallback magic window mode
+    await requestSensors();
 
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
-    if (!supported) {
-        console.warn("Immersive AR tracking not supported on this device/browser.");
-        return;
-    }
+    if (!supported) return;
 
     try {
         const xrHelper = await scene.createDefaultXRExperienceAsync({
@@ -116,11 +93,7 @@ async function enableAR() {
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
-                if (splat) {
-                    // Reset targeting and anchor the splat out in tracking space
-                    camera.target.set(0, 0, 0);
-                    splat.position.set(0, 0, 2); 
-                }
+                if (splat) splat.position.set(0, 0, 2); 
             } else if (state === WebXRState.NOT_IN_XR) {
                 xrActive = false;
                 if (splat) splat.position.set(0, 0, 0); 
@@ -128,14 +101,13 @@ async function enableAR() {
         });
 
         window.removeEventListener("click", enableAR);
-        console.log("WebXR AR Session initialized successfully.");
     } catch (e) {
-        console.error("WebXR error:", e);
+        console.error("WebXR session initialization error:", e);
     }
 }
 
 window.addEventListener("click", enableAR);
 
-// 5. Execution Loops
+// 6. Main Execution Loops
 engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
