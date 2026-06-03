@@ -36,7 +36,7 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 5. Camera — touch drag only, no gyro interference
+// 5. Camera — no touch control, gyro only
 const camera = new ArcRotateCamera(
     "cam",
     0,
@@ -45,13 +45,28 @@ const camera = new ArcRotateCamera(
     Vector3.Zero(),
     scene
 );
-camera.lowerBetaLimit = 0.1;
-camera.upperBetaLimit = Math.PI - 0.1;
-camera.attachControl(canvas, true);
+camera.lowerBetaLimit = 0.2;
+camera.upperBetaLimit = Math.PI - 0.2;
+// No attachControl — gyro drives everything
 
-// 6. WebXR AR
+// 6. Gyro/accelerometer orientation
 let xrActive = false;
 
+if (window.DeviceOrientationEvent) {
+    window.addEventListener("deviceorientation", (event) => {
+        if (xrActive) return;
+        if (event.alpha === null || event.beta === null) return;
+
+        const alpha = (event.alpha * Math.PI) / 180;
+        const rawBeta = ((event.beta + 90) * Math.PI) / 180;
+        const beta = Math.max(0.2, Math.min(Math.PI - 0.2, rawBeta));
+
+        camera.alpha = -alpha;
+        camera.beta = beta;
+    });
+}
+
+// 7. WebXR AR
 async function enableAR() {
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
     if (!supported) {
@@ -80,7 +95,6 @@ async function enableAR() {
             }
         });
 
-        // Place splat 2m in front of camera every frame
         scene.onBeforeRenderObservable.add(() => {
             if (!xrActive || !splat) return;
             const xrCamera = xrHelper.baseExperience.camera;
@@ -98,6 +112,6 @@ async function enableAR() {
 
 window.addEventListener("click", enableAR);
 
-// 7. Render Loop & Window Management
+// 8. Render Loop & Window Management
 engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
