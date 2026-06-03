@@ -29,7 +29,7 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     splat = result.meshes[0];
     if (splat) {
         splat.position.set(0, 0, 2);
-        splat.scaling.setAll(3);
+        splat.scaling.setAll(6);
         console.log("Gaussian Splat loaded successfully!");
     }
 }).catch((err) => {
@@ -84,18 +84,21 @@ async function enableAR() {
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
-                if (splat) {
-                    const xrCamera = xrHelper.baseExperience.camera;
-                    splat.parent = xrCamera;
-                    splat.position.set(0, 0, 2);
-                }
+                if (splat) splat.parent = null; // ensure no parenting
             } else if (state === WebXRState.NOT_IN_XR) {
                 xrActive = false;
-                if (splat) {
-                    splat.parent = null;
-                    splat.position.set(0, 0, 2);
-                }
+                if (splat) splat.position.set(0, 0, 2);
             }
+        });
+
+        // Update splat position every frame relative to XR camera world position
+        scene.onBeforeRenderObservable.add(() => {
+            if (!xrActive || !splat) return;
+            const xrCamera = xrHelper.baseExperience.camera;
+            // Get the camera's real world position and forward direction
+            const forward = xrCamera.getDirection(Vector3.Forward());
+            const worldPos = xrCamera.globalPosition;
+            splat.position.copyFrom(worldPos.add(forward.scale(2)));
         });
 
         window.removeEventListener("click", enableAR);
