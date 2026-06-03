@@ -22,7 +22,7 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     const splat = result.meshes[0];
     if (splat) {
         splat.position.set(0, 0, 5);
-        splat.scaling.setAll(12);
+        splat.scaling.setAll(24);
         splat.rotation.z = Math.PI;
         console.log("Gaussian Splat loaded successfully.");
     }
@@ -34,18 +34,25 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
 const camera = new ArcRotateCamera("cam", 0, Math.PI / 3, 8, new Vector3(0, 0, 5), scene);
 camera.attachControl(canvas, true);
 
-// 3. Inline WebXR session — magic window with full 6DOF from ARCore
+// 3. Immersive AR — single camera, full 6DOF via ARCore, dark background
 const xr = await scene.createDefaultXRExperienceAsync({
     uiOptions: {
-        sessionMode: "inline"
+        sessionMode: "immersive-ar",
+        referenceSpaceType: "local-floor"
     },
-    optionalFeatures: true
+    optionalFeatures: true,
+    disableDefaultUI: false
 });
 
 if (!xr.baseExperience) {
     console.warn("WebXR not supported — falling back to ArcRotateCamera.");
 } else {
-    console.log("WebXR inline session ready.");
+    // Keep the dark background instead of camera passthrough
+    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
+        scene.autoClear = true;
+        scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
+    });
+    console.log("WebXR AR session ready.");
 }
 
 engine.runRenderLoop(() => scene.render());
