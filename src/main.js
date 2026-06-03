@@ -10,7 +10,8 @@ import {
 } from "@babylonjs/core";
 
 // Import the specific loader class explicitly so Vite cannot tree-shake it
-import { PLYFileLoader } from "@babylonjs/loaders/PLY/plyFileLoader";
+import { registerBuiltInLoaders } from "@babylonjs/loaders";
+registerBuiltInLoaders();
 
 // Manually register the PLY plugin into Babylon's global scene loader
 if (SceneLoader) {
