@@ -22,8 +22,8 @@ new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 // 4. Load the Gaussian Splat
 const splat = new GaussianSplattingMesh("gaussianSplat", scene);
 
-// Loading directly via absolute/relative URL configuration
-splat.loadFileAsync({ url: "clusterFly_M.ply" }).then(() => {
+// FIX: Pass the string path directly, including the GitHub Pages subfolder name
+splat.loadFileAsync("/babylon_3DGS/clusterFly_M.ply").then(() => {
     console.log("Gaussian Splat loaded successfully!");
     
     // Position adjustments 
