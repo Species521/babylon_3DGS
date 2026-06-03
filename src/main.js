@@ -5,11 +5,11 @@ import {
     Vector3,
     ArcRotateCamera,
     Color4,
-    GaussianSplattingMesh
+    SceneLoader,
+    WebXRState
 } from "@babylonjs/core";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
 
-// Registers all loaders lazily — only downloads what's actually needed
 registerBuiltInLoaders();
 
 // 1. Initialize Engine and Canvas
@@ -24,15 +24,19 @@ scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
 // 4. Load the Gaussian Splat
-const splat = new GaussianSplattingMesh("gaussianSplat", scene);
-splat.loadFileAsync("clusterFly_M.ply").then(() => {
-    console.log("Gaussian Splat loaded successfully!");
-    splat.position.set(0, 0, 2);
+let splat = null;
+SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
+    splat = result.meshes[0];
+    if (splat) {
+        splat.position.set(0, 0, 2);
+        splat.scaling.setAll(3);
+        console.log("Gaussian Splat loaded successfully!");
+    }
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 5. Default Fallback Camera (Desktop/Mouse Orbit)
+// 5. Camera
 const camera = new ArcRotateCamera(
     "cam",
     0,
@@ -43,27 +47,57 @@ const camera = new ArcRotateCamera(
 );
 camera.attachControl(canvas, true);
 
-// 6. WebXR Immersive AR Switch Function
+// 6. Device orientation fallback (gyro on mobile without WebXR)
+if (window.DeviceOrientationEvent) {
+    window.addEventListener("deviceorientation", (event) => {
+        if (event.alpha === null) return;
+        const alpha = (event.alpha * Math.PI) / 180;
+        const beta  = (event.beta  * Math.PI) / 180;
+        camera.alpha = -alpha;
+        camera.beta  = Math.max(0.1, Math.min(Math.PI - 0.1, beta));
+    });
+}
+
+// 7. WebXR AR
 async function enableAR() {
+    const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
+    if (!supported) {
+        console.warn("Immersive AR not supported — using gyro fallback.");
+        window.removeEventListener("click", enableAR);
+        return;
+    }
     try {
         const xrHelper = await scene.createDefaultXRExperienceAsync({
             uiOptions: {
-                sessionMode: 'immersive-ar',
-                referenceSpaceType: 'local-floor'
+                sessionMode: "immersive-ar",
+                referenceSpaceType: "local-floor"
             }
         });
+
+        xrHelper.baseExperience.onStateChangedObservable.add((state) => {
+            if (state === WebXRState.IN_XR) {
+                if (splat) {
+                    const xrCamera = xrHelper.baseExperience.camera;
+                    splat.parent = xrCamera;
+                    splat.position.set(0, 0, 2); // 2 meters in front
+                }
+            } else if (state === WebXRState.NOT_IN_XR) {
+                if (splat) {
+                    splat.parent = null;
+                    splat.position.set(0, 0, 2);
+                }
+            }
+        });
+
         window.removeEventListener("click", enableAR);
         console.log("WebXR AR Session initialized successfully.");
     } catch (e) {
-        console.error("WebXR is not supported on this device/browser:", e);
+        console.error("WebXR error:", e);
     }
 }
 
-// Activate AR session on first user interaction
 window.addEventListener("click", enableAR);
 
-// 7. Render Loop & Window Management
-engine.runRenderLoop(() => {
-    scene.render();
-});
+// 8. Render Loop & Window Management
+engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
