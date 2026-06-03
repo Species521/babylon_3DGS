@@ -17,7 +17,7 @@ const scene = new Scene(engine);
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
-// 1. Load the Gaussian Splat
+// 1. Load the Gaussian Splat — fixed in world space, never moved
 let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
@@ -33,18 +33,17 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
 
 // 2. Setup Device Orientation Camera
 const camera = new DeviceOrientationCamera("magicWindowCam", new Vector3(0, 0, 0), scene);
+camera.setTarget(new Vector3(0, 0, 5));
+camera.minZ = 0.1;
+camera.maxZ = 1000;
 camera.attachControl(canvas, true);
 
-// 3. Accelerometer-based positional tracking
-// We double-integrate acceleration to get position displacement.
-// Gravity is removed by using accelerationIncludingGravity and subtracting
-// a rolling average — imperfect but works for walking-scale movement.
-
+// 3. Accelerometer-based positional tracking in world space
 const velocity = new Vector3(0, 0, 0);
 const gravity = { x: 0, y: 0, z: 0 };
-const GRAVITY_SMOOTH = 0.95;   // how fast gravity estimate updates
-const DAMPING = 0.85;           // kills drift quickly when device is still
-const SCALE = 0.0005;           // tunable: how much real movement maps to scene units
+const GRAVITY_SMOOTH = 0.95;
+const DAMPING = 0.85;
+const SCALE = 0.0005;
 
 let lastTime = null;
 
@@ -61,18 +60,23 @@ window.addEventListener("devicemotion", (event) => {
     gravity.y = GRAVITY_SMOOTH * gravity.y + (1 - GRAVITY_SMOOTH) * acc.y;
     gravity.z = GRAVITY_SMOOTH * gravity.z + (1 - GRAVITY_SMOOTH) * acc.z;
 
-    // Linear acceleration = total - gravity
-    const ax = (acc.x - gravity.x) * SCALE;
-    const ay = (acc.y - gravity.y) * SCALE;
-    const az = (acc.z - gravity.z) * SCALE;
+    // Device-space linear acceleration (gravity removed)
+    const localAcc = new Vector3(
+        (acc.x - gravity.x) * SCALE,
+        (acc.y - gravity.y) * SCALE,
+        (acc.z - gravity.z) * SCALE
+    );
 
-    // Integrate into velocity, then apply damping
-    velocity.x = (velocity.x + ax * dt) * DAMPING;
-    velocity.y = (velocity.y + ay * dt) * DAMPING;
-    velocity.z = (velocity.z + az * dt) * DAMPING;
+    // Rotate into world space using camera's current orientation
+    const worldAcc = Vector3.TransformNormal(localAcc, camera.getWorldMatrix());
+
+    // Integrate into velocity then damp
+    velocity.x = (velocity.x + worldAcc.x * dt) * DAMPING;
+    velocity.y = (velocity.y + worldAcc.y * dt) * DAMPING;
+    velocity.z = (velocity.z + worldAcc.z * dt) * DAMPING;
 });
 
-// Apply velocity to camera position each frame
+// Move camera in true world space — splat stays fixed at (0, 0, 5)
 scene.onBeforeRenderObservable.add(() => {
     camera.position.addInPlace(velocity);
 });
@@ -87,7 +91,6 @@ async function initSensors() {
             console.error("Sensor initialization failed:", error);
         }
     }
-    // Also request motion permission on iOS
     if (typeof DeviceMotionEvent !== "undefined" &&
         typeof DeviceMotionEvent.requestPermission === "function") {
         try {
