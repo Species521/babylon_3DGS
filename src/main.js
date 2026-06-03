@@ -10,25 +10,24 @@ import {
 } from "@babylonjs/core";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
 
+// Initialize the loaders
 registerBuiltInLoaders();
 
-// 1. Initialize Engine and Canvas
 const canvas = document.getElementById("c");
 const engine = new Engine(canvas, true);
 
-// 2. Scene Setup
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 
-// 3. Lighting
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
-// 4. Load the Gaussian Splat
+// 1. Load the Gaussian Splat
 let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
     if (splat) {
-        splat.position.set(0, 0, 2);
+        // Place the splat directly in front of the initial camera view
+        splat.position.set(0, 0, 0);
         splat.scaling.setAll(6);
         console.log("Gaussian Splat loaded successfully!");
     }
@@ -36,43 +35,71 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 5. Camera — gyro only, no touch control
+// 2. Camera Configuration
 const camera = new ArcRotateCamera(
     "cam",
     0,
     Math.PI / 3,
     8,
-    Vector3.Zero(),
+    Vector3.Zero(), // Target the center where the splat spawns
     scene
 );
 camera.lowerBetaLimit = 0.2;
 camera.upperBetaLimit = Math.PI - 0.2;
 
-// 6. Gyro orientation
+// Enable standard touch controls alongside the gyro so the user isn't locked out
+camera.attachControl(canvas, true);
+
+// 3. Gyroscope Setup (Magic Window Mode)
 let xrActive = false;
 
-if (window.DeviceOrientationEvent) {
-    window.addEventListener("deviceorientation", (event) => {
-        if (xrActive) return;
-        if (event.alpha === null || event.beta === null) return;
-
-        const alpha = (event.alpha * Math.PI) / 180;
-        const rawBeta = ((event.beta + 90) * Math.PI) / 180;
-        const beta = Math.max(0.2, Math.min(Math.PI - 0.2, rawBeta));
-
-        camera.alpha = -alpha;
-        camera.beta = beta;
-    });
+async function requestGyroPermission() {
+    // Check if iOS requires explicit permission activation
+    if (typeof DeviceOrientationEvent !== "undefined" && 
+        typeof DeviceOrientationEvent.requestPermission === "function") {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === "granted") {
+                initGyroListener();
+            }
+        } catch (error) {
+            console.error("DeviceOrientation permission denied:", error);
+        }
+    } else {
+        // Android or non-iOS browsers
+        initGyroListener();
+    }
 }
 
-// 7. WebXR AR
+function initGyroListener() {
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener("deviceorientation", (event) => {
+            if (xrActive) return;
+            if (event.alpha === null || event.beta === null) return;
+
+            // Convert degrees to radians
+            const alpha = (event.alpha * Math.PI) / 180;
+            const rawBeta = ((event.beta + 90) * Math.PI) / 180;
+            const beta = Math.max(0.2, Math.min(Math.PI - 0.2, rawBeta));
+
+            // Smoothly apply orientation to the camera arcs
+            camera.alpha = -alpha;
+            camera.beta = beta;
+        });
+    }
+}
+
+// 4. True Walk-Around via WebXR AR
 async function enableAR() {
+    // Request gyro sensor access first for the fallback mode
+    await requestGyroPermission();
+
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
     if (!supported) {
-        console.warn("Immersive AR not supported on this device/browser.");
-        window.removeEventListener("click", enableAR);
+        console.warn("Immersive AR tracking not supported on this device/browser.");
         return;
     }
+
     try {
         const xrHelper = await scene.createDefaultXRExperienceAsync({
             uiOptions: {
@@ -85,12 +112,11 @@ async function enableAR() {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
                 if (splat) {
-                    splat.parent = null;
-                    splat.position.set(0, 0, 2); // fixed in world space
+                    splat.position.set(0, 0, 2); // Anchor 2 meters out in AR space
                 }
             } else if (state === WebXRState.NOT_IN_XR) {
                 xrActive = false;
-                if (splat) splat.position.set(0, 0, 2);
+                if (splat) splat.position.set(0, 0, 0); // Bring back to origin
             }
         });
 
@@ -101,8 +127,9 @@ async function enableAR() {
     }
 }
 
+// Trigger permissions and potential WebXR initialization on user click
 window.addEventListener("click", enableAR);
 
-// 8. Render Loop & Window Management
+// 5. Execution Loops
 engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
