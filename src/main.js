@@ -36,7 +36,7 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 5. Camera — no touch control, gyro only
+// 5. Camera — gyro only, no touch control
 const camera = new ArcRotateCamera(
     "cam",
     0,
@@ -47,9 +47,8 @@ const camera = new ArcRotateCamera(
 );
 camera.lowerBetaLimit = 0.2;
 camera.upperBetaLimit = Math.PI - 0.2;
-// No attachControl — gyro drives everything
 
-// 6. Gyro/accelerometer orientation
+// 6. Gyro orientation
 let xrActive = false;
 
 if (window.DeviceOrientationEvent) {
@@ -85,22 +84,14 @@ async function enableAR() {
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
-                if (splat) splat.parent = null;
-            } else if (state === WebXRState.NOT_IN_XR) {
-                xrActive = false;
                 if (splat) {
                     splat.parent = null;
-                    splat.position.set(0, 0, 2);
+                    splat.position.set(0, 0, 2); // fixed in world space
                 }
+            } else if (state === WebXRState.NOT_IN_XR) {
+                xrActive = false;
+                if (splat) splat.position.set(0, 0, 2);
             }
-        });
-
-        scene.onBeforeRenderObservable.add(() => {
-            if (!xrActive || !splat) return;
-            const xrCamera = xrHelper.baseExperience.camera;
-            const forward = xrCamera.getDirection(Vector3.Forward());
-            const worldPos = xrCamera.globalPosition;
-            splat.position.copyFrom(worldPos.add(forward.scale(2)));
         });
 
         window.removeEventListener("click", enableAR);
