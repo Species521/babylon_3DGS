@@ -47,9 +47,16 @@ const camera = new ArcRotateCamera(
 );
 camera.attachControl(canvas, true);
 
-// 6. Device orientation fallback (gyro on mobile without WebXR)
+// 6. Device orientation fallback — paused during touch and XR
+let xrActive = false;
+let touching = false;
+
+canvas.addEventListener("touchstart", () => { touching = true; });
+canvas.addEventListener("touchend",   () => { touching = false; });
+
 if (window.DeviceOrientationEvent) {
     window.addEventListener("deviceorientation", (event) => {
+        if (xrActive || touching) return;
         if (event.alpha === null) return;
         const alpha = (event.alpha * Math.PI) / 180;
         const beta  = (event.beta  * Math.PI) / 180;
@@ -76,12 +83,14 @@ async function enableAR() {
 
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
+                xrActive = true;
                 if (splat) {
                     const xrCamera = xrHelper.baseExperience.camera;
                     splat.parent = xrCamera;
-                    splat.position.set(0, 0, 2); // 2 meters in front
+                    splat.position.set(0, 0, 2);
                 }
             } else if (state === WebXRState.NOT_IN_XR) {
+                xrActive = false;
                 if (splat) {
                     splat.parent = null;
                     splat.position.set(0, 0, 2);
