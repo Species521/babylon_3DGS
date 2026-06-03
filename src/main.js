@@ -6,14 +6,14 @@ import {
     ArcRotateCamera,
     Color4,
     GaussianSplattingMesh,
-    SceneLoader // Added to manually register the loader
+    SceneLoader
 } from "@babylonjs/core";
 
-// Explicitly import the loader class to prevent Vite from dropping it
-import { PLYFileLoader } from "@babylonjs/loaders/PLY/plyFileLoader";
+// Import the official PLY entry point natively supported by Vite
+import { PLYFileLoader } from "@babylonjs/loaders/PLY";
 
-// Register it manually so Babylon absolutely has access to it
-if (SceneLoader) {
+// Manually register the loader if it hasn't been auto-registered
+if (SceneLoader && PLYFileLoader) {
     SceneLoader.RegisterPlugin(new PLYFileLoader());
 }
 
@@ -31,14 +31,14 @@ new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 // 4. Load the Gaussian Splat
 const splat = new GaussianSplattingMesh("gaussianSplat", scene);
 
-// Pointing to your exact file name from the logs
+// Pointing directly to your file name inside the public folder
 splat.loadFileAsync({ url: "clusterFly_M.ply" }).then(() => {
     console.log("Gaussian Splat loaded successfully!");
     
-    // Position adjustments
+    // Position adjustments 
     splat.position.set(0, 0, 2); 
     
-    // Rotate 180 degrees if the splat is upside down
+    // Rotate 180 degrees if the splat appears upside down
     // splat.rotation.z = Math.PI;
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
