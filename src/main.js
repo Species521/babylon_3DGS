@@ -3,7 +3,7 @@ import {
     Scene,
     HemisphericLight,
     Vector3,
-    DeviceOrientationCamera,
+    FreeCamera,
     Color4,
     SceneLoader,
     WebXRState
@@ -17,7 +17,6 @@ const canvas = document.getElementById("c");
 const engine = new Engine(canvas, true);
 
 const scene = new Scene(engine);
-// Your preferred dark background
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
@@ -27,54 +26,42 @@ let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
     if (splat) {
-        // Default position for non-AR Magic Window mode
-        splat.position.set(0, 0, 5);
+        // Set its initial resting position in the scene
+        splat.position.set(0, 0, 3);
         splat.scaling.setAll(12);
         splat.rotation.z = Math.PI; // Flipped upside down
-        console.log("Gaussian Splat loaded successfully.");
+        console.log("Gaussian Splat loaded and waiting for anchor initialization.");
     }
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 3. Setup Fallback Device Orientation Camera (Magic Window Mode)
-const camera = new DeviceOrientationCamera("magicWindowCam", new Vector3(0, 0, 0), scene);
-camera.angularSensibility = 1000;
+// 3. Simple Fallback Camera
+// Replacing DeviceOrientationCamera with FreeCamera stops it from hijacking the 
+// tracking matrices when WebXR tries to initialize local-floor boundaries.
+const camera = new FreeCamera("fallbackCam", new Vector3(0, 0, 0), scene);
 camera.attachControl(canvas, true);
 
-// 4. Gyro Sensor Permissions
-async function requestSensors() {
-    if (typeof DeviceOrientationEvent !== "undefined" && 
-        typeof DeviceOrientationEvent.requestPermission === "function") {
-        try {
-            await DeviceOrientationEvent.requestPermission();
-        } catch (error) {
-            console.error("Sensor initialization failed:", error);
-        }
-    }
-}
-
-// 5. WebXR Positional Tracking WITH Dark Background
+// 4. WebXR Positional Tracking Configuration
 async function enableAR() {
-    await requestSensors();
-
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
-    if (!supported) return;
+    if (!supported) {
+        console.warn("Immersive AR tracking not supported on this device.");
+        return;
+    }
 
     try {
         const xrHelper = await scene.createDefaultXRExperienceAsync({
             uiOptions: {
                 sessionMode: "immersive-ar",
-                referenceSpaceType: "local-floor"
+                referenceSpaceType: "local-floor" // Anchors 0,0,0 directly to your physical floor position
             }
         });
 
-        // FIX: Force Babylon to block the underlying device camera feed.
-        // This stops the tablet from rendering the video frames to the screen,
-        // recovering a massive amount of performance while keeping tracking active.
+        // Optional: Hide the camera feed for the dark background performance boost.
+        // If you want the see-through camera view back, simply delete or comment out this block.
         if (xrHelper.baseExperience.featuresManager) {
             scene.onBackgroundCameraLayerChangedObservable.add(() => {
-                // Dissociate the video pass layer from rendering behind our scene
                 if (scene.backgroundCameraShape) {
                     scene.backgroundCameraShape.isVisible = false;
                 }
@@ -83,28 +70,29 @@ async function enableAR() {
 
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
-                // Ensure the background stays solidly dark inside the XR loop
+                // Keep the background dark if the camera feed layer is disabled
                 scene.autoClear = true;
                 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
                 
                 if (splat) {
-                    // Place the splat 2 meters ahead of your physical starting spot
-                    splat.position.set(0, 0, 2); 
+                    // Detach any parent configurations and lock it 3 meters forward from your room's baseline setup origin
+                    splat.parent = null; 
+                    splat.position.set(0, 0, 3); 
+                    console.log("Splat locked to physical room space.");
                 }
             } else if (state === WebXRState.NOT_IN_XR) {
-                if (splat) splat.position.set(0, 0, 5); 
+                if (splat) splat.position.set(0, 0, 3);
             }
         });
 
         window.removeEventListener("click", enableAR);
-        console.log("Positional tracking active over dark background.");
     } catch (e) {
-        console.error("WebXR session initialization error:", e);
+        console.error("WebXR tracking initialization error:", e);
     }
 }
 
 window.addEventListener("click", enableAR);
 
-// 6. Main Execution Loops
+// 5. Main Execution Loops
 engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
