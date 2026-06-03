@@ -7,8 +7,10 @@ import {
     Color4,
     GaussianSplattingMesh
 } from "@babylonjs/core";
-import { GLTFFileLoader } from "@babylonjs/loaders/glTF";
-import { SPLATFileLoader } from "@babylonjs/loaders/SPLAT";
+import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
+
+// Registers all loaders lazily — only downloads what's actually needed
+registerBuiltInLoaders();
 
 // 1. Initialize Engine and Canvas
 const canvas = document.getElementById("c");
