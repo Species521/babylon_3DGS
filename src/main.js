@@ -5,18 +5,9 @@ import {
     Vector3,
     ArcRotateCamera,
     Color4,
-    GaussianSplattingMesh,
-    SceneLoader // Required to manually register the plugin
+    GaussianSplattingMesh
 } from "@babylonjs/core";
-
-// Import the specific loader class explicitly so Vite cannot tree-shake it
-import { registerBuiltInLoaders } from "@babylonjs/loaders";
-registerBuiltInLoaders();
-
-// Manually register the PLY plugin into Babylon's global scene loader
-if (SceneLoader) {
-    SceneLoader.RegisterPlugin(new PLYFileLoader());
-}
+import "@babylonjs/loaders/legacy/legacy";
 
 // 1. Initialize Engine and Canvas
 const canvas = document.getElementById("c");
@@ -31,16 +22,9 @@ new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
 // 4. Load the Gaussian Splat
 const splat = new GaussianSplattingMesh("gaussianSplat", scene);
-
-// Use the clean text string path
 splat.loadFileAsync("clusterFly_M.ply").then(() => {
     console.log("Gaussian Splat loaded successfully!");
-    
-    // Position adjustments 
-    splat.position.set(0, 0, 2); 
-    
-    // Rotate 180 degrees if the splat appears upside down
-    // splat.rotation.z = Math.PI;
+    splat.position.set(0, 0, 2);
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
 });
@@ -65,7 +49,6 @@ async function enableAR() {
                 referenceSpaceType: 'local-floor'
             }
         });
-
         window.removeEventListener("click", enableAR);
         console.log("WebXR AR Session initialized successfully.");
     } catch (e) {
@@ -80,5 +63,4 @@ window.addEventListener("click", enableAR);
 engine.runRenderLoop(() => {
     scene.render();
 });
-
 window.addEventListener("resize", () => engine.resize());
