@@ -36,40 +36,26 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 5. Camera
+// 5. Camera — touch drag only, no gyro interference
 const camera = new ArcRotateCamera(
     "cam",
     0,
-    Math.PI / 2.5,
-    5,
-    new Vector3(0, 0, 2),
+    Math.PI / 3,
+    8,
+    Vector3.Zero(),
     scene
 );
+camera.lowerBetaLimit = 0.1;
+camera.upperBetaLimit = Math.PI - 0.1;
 camera.attachControl(canvas, true);
 
-// 6. Device orientation fallback — paused during touch and XR
+// 6. WebXR AR
 let xrActive = false;
-let touching = false;
 
-canvas.addEventListener("touchstart", () => { touching = true; });
-canvas.addEventListener("touchend",   () => { touching = false; });
-
-if (window.DeviceOrientationEvent) {
-    window.addEventListener("deviceorientation", (event) => {
-        if (xrActive || touching) return;
-        if (event.alpha === null) return;
-        const alpha = (event.alpha * Math.PI) / 180;
-        const beta  = (event.beta  * Math.PI) / 180;
-        camera.alpha = -alpha;
-        camera.beta  = Math.max(0.1, Math.min(Math.PI - 0.1, beta));
-    });
-}
-
-// 7. WebXR AR
 async function enableAR() {
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
     if (!supported) {
-        console.warn("Immersive AR not supported — using gyro fallback.");
+        console.warn("Immersive AR not supported on this device/browser.");
         window.removeEventListener("click", enableAR);
         return;
     }
@@ -84,18 +70,20 @@ async function enableAR() {
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
-                if (splat) splat.parent = null; // ensure no parenting
+                if (splat) splat.parent = null;
             } else if (state === WebXRState.NOT_IN_XR) {
                 xrActive = false;
-                if (splat) splat.position.set(0, 0, 2);
+                if (splat) {
+                    splat.parent = null;
+                    splat.position.set(0, 0, 2);
+                }
             }
         });
 
-        // Update splat position every frame relative to XR camera world position
+        // Place splat 2m in front of camera every frame
         scene.onBeforeRenderObservable.add(() => {
             if (!xrActive || !splat) return;
             const xrCamera = xrHelper.baseExperience.camera;
-            // Get the camera's real world position and forward direction
             const forward = xrCamera.getDirection(Vector3.Forward());
             const worldPos = xrCamera.globalPosition;
             splat.position.copyFrom(worldPos.add(forward.scale(2)));
@@ -110,6 +98,6 @@ async function enableAR() {
 
 window.addEventListener("click", enableAR);
 
-// 8. Render Loop & Window Management
+// 7. Render Loop & Window Management
 engine.runRenderLoop(() => scene.render());
 window.addEventListener("resize", () => engine.resize());
