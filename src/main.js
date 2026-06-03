@@ -17,6 +17,7 @@ const canvas = document.getElementById("c");
 const engine = new Engine(canvas, true);
 
 const scene = new Scene(engine);
+// Your preferred dark background
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
 
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
@@ -26,48 +27,34 @@ let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
     if (splat) {
-        // Position the splat 5 units forward along the Z axis 
-        // This places it directly in front of the camera's default view
+        // Default position for non-AR Magic Window mode
         splat.position.set(0, 0, 5);
-        
-        // Double the size (12)
         splat.scaling.setAll(12);
-        
-        // Flip the splat upside down
-        splat.rotation.z = Math.PI;
-        
-        console.log("Gaussian Splat loaded and positioned in front of camera view.");
+        splat.rotation.z = Math.PI; // Flipped upside down
+        console.log("Gaussian Splat loaded successfully.");
     }
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 3. Setup Native Device Orientation Camera at Origin
-// Placing the camera at (0,0,0) ensures it sweeps the room cleanly when you rotate your tablet
+// 3. Setup Fallback Device Orientation Camera (Magic Window Mode)
 const camera = new DeviceOrientationCamera("magicWindowCam", new Vector3(0, 0, 0), scene);
-
-// Set fallback position tracking details
-camera.angularSensibility = 1000; // Adjusts how fast the view swings when you turn
+camera.angularSensibility = 1000;
 camera.attachControl(canvas, true);
 
-// 4. Gyro Sensor Permissions Initialization
-let xrActive = false;
-
+// 4. Gyro Sensor Permissions
 async function requestSensors() {
     if (typeof DeviceOrientationEvent !== "undefined" && 
         typeof DeviceOrientationEvent.requestPermission === "function") {
         try {
-            const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === "granted") {
-                console.log("Device orientation tracking activated.");
-            }
+            await DeviceOrientationEvent.requestPermission();
         } catch (error) {
             console.error("Sensor initialization failed:", error);
         }
     }
 }
 
-// 5. Native WebXR AR Switch
+// 5. WebXR Positional Tracking WITH Dark Background
 async function enableAR() {
     await requestSensors();
 
@@ -82,20 +69,35 @@ async function enableAR() {
             }
         });
 
+        // FIX: Force Babylon to block the underlying device camera feed.
+        // This stops the tablet from rendering the video frames to the screen,
+        // recovering a massive amount of performance while keeping tracking active.
+        if (xrHelper.baseExperience.featuresManager) {
+            scene.onBackgroundCameraLayerChangedObservable.add(() => {
+                // Dissociate the video pass layer from rendering behind our scene
+                if (scene.backgroundCameraShape) {
+                    scene.backgroundCameraShape.isVisible = false;
+                }
+            });
+        }
+
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
-                xrActive = true;
+                // Ensure the background stays solidly dark inside the XR loop
+                scene.autoClear = true;
+                scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
+                
                 if (splat) {
-                    // In WebXR mode, let the AR engine handle spatial anchoring
+                    // Place the splat 2 meters ahead of your physical starting spot
                     splat.position.set(0, 0, 2); 
                 }
             } else if (state === WebXRState.NOT_IN_XR) {
-                xrActive = false;
                 if (splat) splat.position.set(0, 0, 5); 
             }
         });
 
         window.removeEventListener("click", enableAR);
+        console.log("Positional tracking active over dark background.");
     } catch (e) {
         console.error("WebXR session initialization error:", e);
     }
