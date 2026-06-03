@@ -4,7 +4,6 @@ import {
     HemisphericLight,
     Vector3,
     DeviceOrientationCamera,
-    TransformNode,
     Color4,
     SceneLoader,
     WebXRState
@@ -27,34 +26,28 @@ let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
     if (splat) {
-        // Place splat at origin
-        splat.position.set(0, 0, 0);
+        // Position the splat 5 units forward along the Z axis 
+        // This places it directly in front of the camera's default view
+        splat.position.set(0, 0, 5);
         
-        // Double the size (set to 12)
+        // Double the size (12)
         splat.scaling.setAll(12);
         
         // Flip the splat upside down
         splat.rotation.z = Math.PI;
         
-        console.log("Gaussian Splat configured successfully.");
+        console.log("Gaussian Splat loaded and positioned in front of camera view.");
     }
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
 });
 
-// 3. Setup Spatial Magic Window Rigging
-// Create an anchor node to offset the camera so it looks at the splat
-const cameraAnchor = new TransformNode("cameraAnchor", scene);
-cameraAnchor.position.set(0, 0, -8); // Push the camera platform back 8 units
+// 3. Setup Native Device Orientation Camera at Origin
+// Placing the camera at (0,0,0) ensures it sweeps the room cleanly when you rotate your tablet
+const camera = new DeviceOrientationCamera("magicWindowCam", new Vector3(0, 0, 0), scene);
 
-// Native Device Orientation Camera setup
-const camera = new DeviceOrientationCamera("magicWindowCam", Vector3.Zero(), scene);
-
-// Attach camera to our anchor node
-camera.parent = cameraAnchor;
-
-// Ensure camera points directly at the splat origin
-camera.setTarget(Vector3.Zero());
+// Set fallback position tracking details
+camera.angularSensibility = 1000; // Adjusts how fast the view swings when you turn
 camera.attachControl(canvas, true);
 
 // 4. Gyro Sensor Permissions Initialization
@@ -76,7 +69,6 @@ async function requestSensors() {
 
 // 5. Native WebXR AR Switch
 async function enableAR() {
-    // Trigger sensor check for fallback magic window mode
     await requestSensors();
 
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
@@ -93,10 +85,13 @@ async function enableAR() {
         xrHelper.baseExperience.onStateChangedObservable.add((state) => {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
-                if (splat) splat.position.set(0, 0, 2); 
+                if (splat) {
+                    // In WebXR mode, let the AR engine handle spatial anchoring
+                    splat.position.set(0, 0, 2); 
+                }
             } else if (state === WebXRState.NOT_IN_XR) {
                 xrActive = false;
-                if (splat) splat.position.set(0, 0, 0); 
+                if (splat) splat.position.set(0, 0, 5); 
             }
         });
 
