@@ -26,10 +26,15 @@ let splat = null;
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     splat = result.meshes[0];
     if (splat) {
-        // Place the splat directly in front of the initial camera view
         splat.position.set(0, 0, 0);
-        splat.scaling.setAll(6);
-        console.log("Gaussian Splat loaded successfully!");
+        
+        // Doubled the scaling from 6 to 12
+        splat.scaling.setAll(12);
+        
+        // Flip the splat upside down (180 degrees around the Z axis)
+        splat.rotation.z = Math.PI;
+        
+        console.log("Gaussian Splat loaded, resized, and inverted successfully!");
     }
 }).catch((err) => {
     console.error("Error loading Gaussian Splat:", err);
@@ -41,20 +46,17 @@ const camera = new ArcRotateCamera(
     0,
     Math.PI / 3,
     8,
-    Vector3.Zero(), // Target the center where the splat spawns
+    Vector3.Zero(), 
     scene
 );
 camera.lowerBetaLimit = 0.2;
 camera.upperBetaLimit = Math.PI - 0.2;
-
-// Enable standard touch controls alongside the gyro so the user isn't locked out
 camera.attachControl(canvas, true);
 
 // 3. Gyroscope Setup (Magic Window Mode)
 let xrActive = false;
 
 async function requestGyroPermission() {
-    // Check if iOS requires explicit permission activation
     if (typeof DeviceOrientationEvent !== "undefined" && 
         typeof DeviceOrientationEvent.requestPermission === "function") {
         try {
@@ -66,7 +68,6 @@ async function requestGyroPermission() {
             console.error("DeviceOrientation permission denied:", error);
         }
     } else {
-        // Android or non-iOS browsers
         initGyroListener();
     }
 }
@@ -75,23 +76,27 @@ function initGyroListener() {
     if (window.DeviceOrientationEvent) {
         window.addEventListener("deviceorientation", (event) => {
             if (xrActive) return;
-            if (event.alpha === null || event.beta === null) return;
+            if (event.alpha === null || event.beta === null || event.gamma === null) return;
 
             // Convert degrees to radians
             const alpha = (event.alpha * Math.PI) / 180;
-            const rawBeta = ((event.beta + 90) * Math.PI) / 180;
-            const beta = Math.max(0.2, Math.min(Math.PI - 0.2, rawBeta));
+            const beta = (event.beta * Math.PI) / 180;
+            const gamma = (event.gamma * Math.PI) / 180;
 
-            // Smoothly apply orientation to the camera arcs
+            // Subtly shift the camera's target position based on tilt to break the "locked to screen" feel
+            // This simulates slight positional head-tracking/translation purely via rotational data
+            camera.target.x = Math.sin(gamma) * 2;
+            camera.target.y = Math.sin(beta - (Math.PI / 3)) * 2;
+
+            // Apply smooth orientation to the viewing arcs
             camera.alpha = -alpha;
-            camera.beta = beta;
+            camera.beta = Math.max(0.2, Math.min(Math.PI - 0.2, beta));
         });
     }
 }
 
 // 4. True Walk-Around via WebXR AR
 async function enableAR() {
-    // Request gyro sensor access first for the fallback mode
     await requestGyroPermission();
 
     const supported = await navigator.xr?.isSessionSupported("immersive-ar").catch(() => false);
@@ -112,11 +117,13 @@ async function enableAR() {
             if (state === WebXRState.IN_XR) {
                 xrActive = true;
                 if (splat) {
-                    splat.position.set(0, 0, 2); // Anchor 2 meters out in AR space
+                    // Reset targeting and anchor the splat out in tracking space
+                    camera.target.set(0, 0, 0);
+                    splat.position.set(0, 0, 2); 
                 }
             } else if (state === WebXRState.NOT_IN_XR) {
                 xrActive = false;
-                if (splat) splat.position.set(0, 0, 0); // Bring back to origin
+                if (splat) splat.position.set(0, 0, 0); 
             }
         });
 
@@ -127,7 +134,6 @@ async function enableAR() {
     }
 }
 
-// Trigger permissions and potential WebXR initialization on user click
 window.addEventListener("click", enableAR);
 
 // 5. Execution Loops
