@@ -6,8 +6,7 @@ import {
     Color4,
     SceneLoader,
     ArcRotateCamera,
-    WebXRState,
-    PointerEventTypes
+    WebXRState
 } from "@babylonjs/core";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
 
@@ -20,6 +19,9 @@ engine.targetFPS = 42;
 
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
+scene.skipPointerMovePicking = true; // no raycasting on every mousemove
+scene.autoClearDepthAndStencil = false; // skip unnecessary buffer clears
+
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
 // 1. Load the Gaussian Splat — fixed in world space
@@ -45,10 +47,11 @@ camera.maxZ = 30;
 camera.attachControl(canvas, true);
 
 // 3. Pinch-to-scale in XR
+// Listen on window — WebXR swallows touch events on canvas
 let xrActive = false;
 let isPinching = false;
 let lastPinchDistance = null;
-const PINCH_SCALE_SPEED = 0.04; // tunable
+const PINCH_SCALE_SPEED = 0.04;
 
 function getPinchDistance(touches) {
     const dx = touches[0].clientX - touches[1].clientX;
@@ -56,7 +59,7 @@ function getPinchDistance(touches) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-canvas.addEventListener("touchstart", (e) => {
+window.addEventListener("touchstart", (e) => {
     if (!xrActive || !splat) return;
     if (e.touches.length === 2) {
         isPinching = true;
@@ -64,19 +67,18 @@ canvas.addEventListener("touchstart", (e) => {
     }
 });
 
-canvas.addEventListener("touchmove", (e) => {
+window.addEventListener("touchmove", (e) => {
     if (!xrActive || !splat || !isPinching) return;
     if (e.touches.length === 2) {
         const currentDistance = getPinchDistance(e.touches);
         const delta = currentDistance - lastPinchDistance;
-        // Scale all axes uniformly
         const newScale = Math.max(1, splat.scaling.x + delta * PINCH_SCALE_SPEED);
         splat.scaling.setAll(newScale);
         lastPinchDistance = currentDistance;
     }
-});
+}, { passive: true }); // passive for performance
 
-canvas.addEventListener("touchend", (e) => {
+window.addEventListener("touchend", (e) => {
     if (e.touches.length < 2) {
         isPinching = false;
         lastPinchDistance = null;
@@ -104,7 +106,8 @@ if (!xr.baseExperience) {
             if (backgroundRemover) {
                 xr.baseExperience.featuresManager.disableFeature("xr-background-remover");
             }
-            engine.setHardwareScalingLevel(1.5);
+            // Push scaling higher in XR for better framerate
+            engine.setHardwareScalingLevel(2);
         } else if (state === WebXRState.NOT_IN_XR) {
             xrActive = false;
             isPinching = false;
