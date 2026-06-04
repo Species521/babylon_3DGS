@@ -22,8 +22,8 @@ new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => {
     const splat = result.meshes[0];
     if (splat) {
-        splat.position.set(0, 0, 8);
-        splat.scaling.setAll(16);
+        splat.position.set(0, 0, 3);
+        splat.scaling.setAll(8);
         splat.rotation.z = Math.PI;
         console.log("Gaussian Splat loaded successfully.");
     }
@@ -33,7 +33,9 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
 
 // 2. Fallback camera for desktop/non-XR
 const camera = new ArcRotateCamera("cam", 0, Math.PI / 3, 8, new Vector3(0, 0, 5), scene);
-camera.pinchPrecision = 50;
+camera.pinchPrecision = 84;
+camera.minZ = 0.02;
+camera.maxZ = 50;
 camera.attachControl(canvas, true);
 
 // 3. Immersive AR — single camera, full 6DOF via ARCore, dark background
