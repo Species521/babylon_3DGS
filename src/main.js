@@ -5,7 +5,8 @@ import {
     Vector3,
     Color4,
     SceneLoader,
-    ArcRotateCamera
+    ArcRotateCamera,
+    WebXRState
 } from "@babylonjs/core";
 import { registerBuiltInLoaders } from "@babylonjs/loaders/dynamic";
 
@@ -32,8 +33,8 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
 
 // 2. Fallback camera for desktop/non-XR
 const camera = new ArcRotateCamera("cam", 0, Math.PI / 3, 8, new Vector3(0, 0, 5), scene);
-camera.attachControl(canvas, true);
 camera.pinchPrecision = 50;
+camera.attachControl(canvas, true);
 
 // 3. Immersive AR — single camera, full 6DOF via ARCore, dark background
 const xr = await scene.createDefaultXRExperienceAsync({
@@ -41,17 +42,23 @@ const xr = await scene.createDefaultXRExperienceAsync({
         sessionMode: "immersive-ar",
         referenceSpaceType: "local-floor"
     },
-    optionalFeatures: true,
-    disableDefaultUI: false
+    optionalFeatures: true
 });
 
 if (!xr.baseExperience) {
     console.warn("WebXR not supported — falling back to ArcRotateCamera.");
 } else {
-    // Keep the dark background instead of camera passthrough
-    xr.baseExperience.sessionManager.onXRSessionInit.add(() => {
-        scene.autoClear = true;
-        scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
+    xr.baseExperience.onStateChangedObservable.add((state) => {
+        if (state === WebXRState.IN_XR) {
+            // Force dark background, kill camera passthrough
+            scene.autoClear = true;
+            scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
+            // Disable the background remover feature if active
+            const backgroundRemover = xr.baseExperience.featuresManager.getEnabledFeature("xr-background-remover");
+            if (backgroundRemover) {
+                xr.baseExperience.featuresManager.disableFeature("xr-background-remover");
+            }
+        }
     });
     console.log("WebXR AR session ready.");
 }
