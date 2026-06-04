@@ -23,7 +23,7 @@ SceneLoader.ImportMeshAsync("", "", "clusterFly_M.ply", scene).then((result) => 
     const splat = result.meshes[0];
     if (splat) {
         splat.position.set(0, 0, 5);
-        splat.scaling.setAll(48);
+        splat.scaling.setAll(16);
         splat.rotation.z = Math.PI;
         console.log("Gaussian Splat loaded successfully.");
     }
