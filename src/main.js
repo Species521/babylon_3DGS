@@ -19,8 +19,8 @@ engine.targetFPS = 42;
 
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.08, 0.08, 0.08, 1);
-scene.skipPointerMovePicking = true; // no raycasting on every mousemove
-scene.autoClearDepthAndStencil = false; // skip unnecessary buffer clears
+scene.skipPointerMovePicking = true;
+scene.autoClearDepthAndStencil = false;
 
 new HemisphericLight("light", new Vector3(0, 1, 0), scene);
 
@@ -47,7 +47,6 @@ camera.maxZ = 30;
 camera.attachControl(canvas, true);
 
 // 3. Pinch-to-scale in XR
-// Listen on window — WebXR swallows touch events on canvas
 let xrActive = false;
 let isPinching = false;
 let lastPinchDistance = null;
@@ -72,11 +71,11 @@ window.addEventListener("touchmove", (e) => {
     if (e.touches.length === 2) {
         const currentDistance = getPinchDistance(e.touches);
         const delta = currentDistance - lastPinchDistance;
-        const newScale = Math.max(1, splat.scaling.x + delta * PINCH_SCALE_SPEED);
+        const newScale = Math.max(0.5, splat.scaling.x + delta * PINCH_SCALE_SPEED);
         splat.scaling.setAll(newScale);
         lastPinchDistance = currentDistance;
     }
-}, { passive: true }); // passive for performance
+}, { passive: true });
 
 window.addEventListener("touchend", (e) => {
     if (e.touches.length < 2) {
@@ -106,13 +105,16 @@ if (!xr.baseExperience) {
             if (backgroundRemover) {
                 xr.baseExperience.featuresManager.disableFeature("xr-background-remover");
             }
-            // Push scaling higher in XR for better framerate
             engine.setHardwareScalingLevel(2);
+            // Quarter size in AR
+            if (splat) splat.scaling.setAll(2);
         } else if (state === WebXRState.NOT_IN_XR) {
             xrActive = false;
             isPinching = false;
             lastPinchDistance = null;
             engine.setHardwareScalingLevel(1);
+            // Restore original scale when leaving AR
+            if (splat) splat.scaling.setAll(8);
         }
     });
     console.log("WebXR AR session ready.");
